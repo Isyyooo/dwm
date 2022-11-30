@@ -50,6 +50,7 @@
 #define INTERSECT(x,y,w,h,m)    (MAX(0, MIN((x)+(w),(m)->wx+(m)->ww) - MAX((x),(m)->wx)) \
                                * MAX(0, MIN((y)+(h),(m)->wy+(m)->wh) - MAX((y),(m)->wy)))
 #define ISVISIBLE(C)            ((C->tags & C->mon->tagset[C->mon->seltags]))
+#define HIDDEN(c)               ((getstate(c->win) == IconicState))
 #define LENGTH(X)               (sizeof X / sizeof X[0])
 #define MOUSEMASK               (BUTTONMASK|PointerMotionMask)
 #define WIDTH(X)                ((X)->w + 2 * (X)->bw)
@@ -169,6 +170,7 @@ static void focus(Client *c);
 static void focusin(XEvent *e);
 static void focusmon(const Arg *arg);
 static void focusstack(const Arg *arg);
+static void pointerfocuswin(Client *c);
 static Atom getatomprop(Client *c, Atom prop);
 static int getrootptr(int *x, int *y);
 static long getstate(Window w);
@@ -200,7 +202,10 @@ static void sendmon(Client *c, Monitor *m);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
+
+static void selectlayout(const Arg *arg);
 static void setlayout(const Arg *arg);
+
 static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
@@ -216,6 +221,7 @@ static void magicgrid(Monitor *m);
 
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
+static void togglealfloating(const Arg *arg);
 static void toggletag(const Arg *arg);
 static void toggleview(const Arg *arg);
 static void unfocus(Client *c, int setfocus);
@@ -876,6 +882,16 @@ focusstack(const Arg *arg)
 	}
 }
 
+void
+pointerfocuswin(Client *c)
+{
+  if (c) {
+    XWarpPointer(dpy, None, root, 0, 0, 0, 0, c->x + c->w / 2, c->y + c->h / 2);
+    focus(c);
+  } else
+    XWarpPointer(dpy, None, root, 0, 0, 0, 0, selmon->wx + selmon->ww / 3, selmon->wy + selmon->wh / 2);
+}
+
 Atom
 getatomprop(Client *c, Atom prop)
 {
@@ -1514,6 +1530,14 @@ setfullscreen(Client *c, int fullscreen)
 }
 
 void
+selectlayout(const Arg *arg)
+{
+  const Layout *cur = selmon->lt[selmon->sellt];
+  const Layout *target = cur == arg->v ? &layouts[0] : arg->v;
+  setlayout(&(Arg) { .v = target });
+}
+
+void
 setlayout(const Arg *arg)
 {
 	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
@@ -1774,10 +1798,41 @@ togglefloating(const Arg *arg)
 	if (selmon->sel->isfullscreen) /* no support for fullscreen windows */
 		return;
 	selmon->sel->isfloating = !selmon->sel->isfloating || selmon->sel->isfixed;
+
 	if (selmon->sel->isfloating)
 		resize(selmon->sel, selmon->sel->x, selmon->sel->y,
 			selmon->sel->w, selmon->sel->h, 0);
 	arrange(selmon);
+}
+
+void
+togglealfloating(const Arg *arg)
+{
+    Client *c = NULL;
+    int somefloating = 0;
+
+    if (!selmon->sel || selmon->sel->isfullscreen)
+        return;
+
+    for (c = selmon->clients; c; c = c->next)
+        if (ISVISIBLE(c) && !HIDDEN(c) && c->isfloating) {
+            somefloating = 1;
+            break;
+        }
+
+    if (somefloating) {
+        for (c = selmon->clients; c; c = c->next)
+            if (ISVISIBLE(c) && !HIDDEN(c))
+                c->isfloating = 0;
+        arrange(selmon);
+    } else {
+        for (c = selmon->clients; c; c = c->next)
+            if (ISVISIBLE(c) && !HIDDEN(c)) {
+                c->isfloating = 1;
+                resize(c, c->x + 2 * snap, c->y + 2 * snap, MAX(c->w - 4 * snap, snap) , MAX(c->h - 4 * snap, snap), 0);
+            }
+    }
+    pointerfocuswin(selmon->sel);
 }
 
 void
