@@ -26,6 +26,7 @@ static const unsigned int alphas[][3]      = {
 };
 
 static const char *autostartscript = "~/Documents/scripts/autostart.sh";
+static const char *barscript = "$DWM/barscripts/statusbar.sh";
 
 /* tagging */
 static const char *tags[] = { "1", "2", "3", "4", "5", "6", "7", "8", "9" };
