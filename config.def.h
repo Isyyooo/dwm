@@ -18,6 +18,7 @@ static const char *colors[][3]      = {
 	/*               fg         bg         border   */
 	[SchemeNorm] = { "#bbbbbb", "#333333", "#444444" },
 	[SchemeSel]  = { "#ffffff", "#37474F", "#42A5F5" },
+  [SchemeHid] = { "#dddddd", NULL, NULL },
 };
 static const unsigned int alphas[][3]      = {
 	/*               fg      bg        border     */
