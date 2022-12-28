@@ -196,7 +196,6 @@ static void killclient(const Arg *arg);
 static void manage(Window w, XWindowAttributes *wa);
 static void mappingnotify(XEvent *e);
 static void maprequest(XEvent *e);
-static void monocle(Monitor *m);
 static void motionnotify(XEvent *e);
 static void movemouse(const Arg *arg);
 static Client *nexttiled(Client *c);
@@ -216,7 +215,10 @@ static void sendmon(Client *c, Monitor *m);
 static void setclientstate(Client *c, long state);
 static void setfocus(Client *c);
 static void setfullscreen(Client *c, int fullscreen);
+
+static void selectlayout(const Arg *arg);
 static void setlayout(const Arg *arg);
+
 static void setmfact(const Arg *arg);
 static void setup(void);
 static void seturgent(Client *c, int urg);
@@ -225,7 +227,11 @@ static void showhide(Client *c);
 static void sigchld(int unused);
 static void spawn(const Arg *arg);
 static void tag(const Arg *arg);
+
 static void tile(Monitor *m);
+static void grid(Monitor *m, uint gappo, uint gappi);
+static void magicgrid(Monitor *m);
+
 static void togglebar(const Arg *arg);
 static void togglefloating(const Arg *arg);
 static void toggletag(const Arg *arg);
@@ -432,8 +438,10 @@ arrangemon(Monitor *m)
 void
 attach(Client *c)
 {
-	c->next = c->mon->clients;
-	c->mon->clients = c;
+    Client **tc;
+    for (tc = &c->mon->clients; *tc; tc = &(*tc)->next);
+    *tc = c;
+    c->next = NULL;
 }
 
 void
@@ -1324,21 +1332,6 @@ maprequest(XEvent *e)
 }
 
 void
-monocle(Monitor *m)
-{
-	unsigned int n = 0;
-	Client *c;
-
-	for (c = m->clients; c; c = c->next)
-		if (ISVISIBLE(c))
-			n++;
-	if (n > 0) /* override layout symbol */
-		snprintf(m->ltsymbol, sizeof m->ltsymbol, "[%d]", n);
-	for (c = nexttiled(m->clients); c; c = nexttiled(c->next))
-		resize(c, m->wx, m->wy, m->ww - 2 * c->bw, m->wh - 2 * c->bw, 0);
-}
-
-void
 motionnotify(XEvent *e)
 {
 	static Monitor *mon = NULL;
@@ -1426,7 +1419,8 @@ void
 pop(Client *c)
 {
 	detach(c);
-	attach(c);
+  c->next = c->mon->clients;
+  c->mon->clients = c;
 	focus(c);
 	arrange(c->mon);
   pointerfocuswin(c);
@@ -1730,6 +1724,14 @@ setfullscreen(Client *c, int fullscreen)
 }
 
 void
+selectlayout(const Arg *arg)
+{
+  const Layout *cur = selmon->lt[selmon->sellt];
+  const Layout *target = cur == arg->v ? &layouts[0] : arg->v;
+  setlayout(&(Arg) { .v = target });
+}
+
+void
 setlayout(const Arg *arg)
 {
 	if (!arg || !arg->v || arg->v != selmon->lt[selmon->sellt])
@@ -1909,7 +1911,7 @@ tag(const Arg *arg)
 void
 tile(Monitor *m)
 {
-	unsigned int i, n, h, mw, my, ty;
+	unsigned int i, n, h, r, mw, my, ty;
 	Client *c;
 
 	for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
@@ -1917,21 +1919,69 @@ tile(Monitor *m)
 		return;
 
 	if (n > m->nmaster)
-		mw = m->nmaster ? m->ww * m->mfact : 0;
+		mw = m->nmaster ? (m->ww + gappi) * m->mfact : 0;
 	else
-		mw = m->ww;
-	for (i = my = ty = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
+		mw = m->ww - 2 * gappo + gappi;
+	for (i = 0, my = ty = gappo, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++)
 		if (i < m->nmaster) {
-			h = (m->wh - my) / (MIN(n, m->nmaster) - i);
-			resize(c, m->wx, m->wy + my, mw - (2*c->bw), h - (2*c->bw), 0);
-			if (my + HEIGHT(c) < m->wh)
-				my += HEIGHT(c);
+      r = MIN(n, m->nmaster) - i;
+      h = (m->wh - my - gappo - gappi * (r - 1)) / r;
+			resize(c, m->wx + gappo, m->wy + my, mw - (2*c->bw) - gappi, h - (2*c->bw), 0);
+			my += HEIGHT(c) + gappi;
 		} else {
-			h = (m->wh - ty) / (n - i);
-			resize(c, m->wx + mw, m->wy + ty, m->ww - mw - (2*c->bw), h - (2*c->bw), 0);
-			if (ty + HEIGHT(c) < m->wh)
-				ty += HEIGHT(c);
+      r = n - i;
+			h = (m->wh - ty - gappo - gappi * (r - 1)) / r;
+			resize(c, m->wx + mw + gappo, m->wy + ty, m->ww - mw - (2*c->bw) - 2 * gappo, h - (2*c->bw), 0);
+			ty += HEIGHT(c) + gappi;
 		}
+}
+
+void grid(Monitor *m, uint gappo, uint gappi)
+{
+  unsigned int i, n, cx, cy, cw, ch, dx, cols, rows, overcols;
+  Client *c;
+
+  for (n = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), n++);
+  if (n == 0) return;
+  if (n == 1) {
+    c = nexttiled(m->clients);
+    cw = (m->ww - 2 * gappo) * 0.7;
+    ch = (m->wh - 2 * gappo) * 0.65;
+    resize(c, m->mx + (m->mw - cw) / 2 + gappo, m->my + (m->mh - ch) / 2 + gappo, cw - 2 * c->bw, ch - 2 * c->bw, 0);
+    return;
+  }
+  if (n == 2) {
+    c = nexttiled(m->clients);
+    cw = (m->ww - 2 * gappo - gappi) / 2;
+    ch = (m->wh - 2 * gappo) * 0.65;
+    resize(c, m->mx + gappo, m->my + (m->mh - ch) / 2 + gappo, cw - 2 * c->bw, ch - 2 * c->bw, 0);
+    resize(nexttiled(c->next), m->mx + cw + gappo + gappi, m->my + (m->mh - ch) / 2 + gappo, cw - 2 * c->bw, ch - 2 * c->bw, 0);
+    return;
+  }
+
+  for (cols = 0; cols <= n / 2; cols++)
+    if (cols * cols >=n)
+      break;
+  rows = (cols && (cols - 1) * cols >=n) ? cols - 1 : cols;
+    ch = (m->wh - 2 * gappo - (rows - 1) * gappi) / rows;
+    cw = (m->ww - 2 * gappo - (cols - 1) * gappi) / cols;
+
+  overcols = n % cols;
+  if (overcols) dx = (m->ww - overcols * cw - (overcols - 1) * gappi) / 2 -gappo;
+    for (i = 0, c = nexttiled(m->clients); c; c = nexttiled(c->next), i++) {
+      cx = m->wx + (i % cols) * (cw + gappi);
+      cy = m->wy + (i / cols) * (ch + gappi);
+      if (overcols && i >=n - overcols) {
+        cx += dx;
+      }
+    resize(c, cx + gappo, cy + gappo, cw - 2 * c->bw, ch - 2 * c->bw, 0);
+  }
+}
+
+void
+magicgrid(Monitor *m)
+{
+  grid(m, gappo, gappi);
 }
 
 void
