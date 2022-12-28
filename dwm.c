@@ -95,6 +95,7 @@ struct Client {
 	int oldx, oldy, oldw, oldh;
 	int basew, baseh, incw, inch, maxw, maxh, minw, minh, hintsvalid;
 	int bw, oldbw;
+  int taskw;
 	unsigned int tags;
 	int isfixed, isfloating, isurgent, neverfocus, oldstate, isfullscreen;
 	Client *next;
@@ -839,10 +840,11 @@ drawstatusbar(Monitor *m, int bh, char* stext) {
 void
 drawbar(Monitor *m)
 {
-	int x, w, tw = 0, n = 0, scm;
-  // int boxs = drw->fonts->h / 9;
+	int x, empty_w, w, tw = 0;
+  int tasks_w;
+	// int boxs = drw->fonts->h / 9;
 	// int boxw = drw->fonts->h / 6 + 2;
-	unsigned int i, occ = 0, urg = 0;
+	unsigned int i, occ = 0, urg = 0, scm;
 	Client *c;
 
 	if (!m->showbar)
@@ -854,8 +856,6 @@ drawbar(Monitor *m)
 	}
 
 	for (c = m->clients; c; c = c->next) {
-		if (ISVISIBLE(c))
-			n++;
 		occ |= c->tags;
 		if (c->isurgent)
 			urg |= c->tags;
@@ -874,40 +874,39 @@ drawbar(Monitor *m)
 	drw_setscheme(drw, scheme[SchemeNorm]);
 	x = drw_text(drw, x, 0, w, bh, lrpad / 2, m->ltsymbol, 0);
 
-	if ((w = m->ww - tw - x) > bh) {
-		if (n > 0) {
-			int remainder = w % n;
-			int tabw = (1.0 / (double)n) * w + 1;
-			for (c = m->clients; c; c = c->next) {
-				if (!ISVISIBLE(c))
-					continue;
-				if (m->sel == c)
-					scm = SchemeSel;
-				else if (HIDDEN(c))
-					scm = SchemeHid;
-				else
-					scm = SchemeNorm;
-				drw_setscheme(drw, scheme[scm]);
+  for (c = m->clients; c; c = c->next) {
+    if (!ISVISIBLE(c))
+      continue;
+    if (m->sel == c)
+      scm = SchemeSel;
+    else if (HIDDEN(c))
+      scm = SchemeHid;
+    else
+      scm = SchemeNorm;
+    drw_setscheme(drw, scheme[scm]);
 
-				if (remainder >= 0) {
-					if (remainder == 0) {
-						tabw--;
-					}
-					remainder--;
-				}
-				drw_text(drw, x, 0, tabw, bh, lrpad / 2, c->name, 0);
-				x += tabw;
-			}
-		} else {
-			drw_setscheme(drw, scheme[SchemeNorm]);
-			drw_rect(drw, x, 0, w, bh, 1, 1);
-		}
-	}
-	m->bt = n;
-	m->btw = w;
-	drw_map(drw, m->barwin, 0, 0, m->ww, bh);
+    w = MIN(TEXTW(c->name), TEXTW("         "));
+    empty_w = m->ww - x - tw;
+    if (w > empty_w) {
+      w = empty_w;
+      x = drw_text(drw, x, 0, w, bh, lrpad / 2, "...", 0);
+      c->taskw = w;
+      tasks_w += w;
+      break;
+    } else {
+      x = drw_text(drw, x, 0, w, bh, lrpad / 2, c->name, 0);
+      c->taskw = w;
+      tasks_w += w;
+    }
+  }
+  empty_w = m ->ww - x - tw;
+  if (empty_w > 0) {
+    drw_setscheme(drw, scheme[SchemeHid]);
+    drw_rect(drw, x, 0, empty_w, bh, 1, 1);
+  }
+
+  drw_map(drw, m->barwin, 0, 0, m->ww, bh);
 }
-
 void
 drawbars(void)
 {
