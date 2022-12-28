@@ -25,6 +25,7 @@ static const unsigned int alphas[][3]      = {
 	[SchemeSel]  = { OPAQUE, baralpha, borderalpha },
 };
 
+static const char *autostartscript = "~/Documents/scripts/autostart.sh";
 /* tagging */
 static const char *tags[] = { "", "", "", "", "", "", "", "", "" };
 
