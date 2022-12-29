@@ -490,14 +490,16 @@ buttonpress(XEvent *e)
 			x += blw;
 			c = m->clients;
 
-			if (c) {
-				do {
-					if (!ISVISIBLE(c))
-						continue;
-					else
-						x +=(1.0 / (double)m->bt) * m->btw;
-				} while (ev->x > x && (c = c->next));
+      if (m->bt == 0) return;
 
+      do {
+          if (!ISVISIBLE(c))
+            continue;
+          else
+            x += c->taskw;
+      } while (ev->x > x && (c = c->next));
+
+			if (c) {
 				click = ClkWinTitle;
 				arg.v = c;
 			}
