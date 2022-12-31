@@ -36,6 +36,7 @@ static const Rule rules[] = {
   {"Nemo",                      NULL,       NULL,       0,            1,           -1 },
   {"Clash for Windows",         NULL,       NULL,       1 << 8,       0,           -1 },
   {"Google-chrome",             NULL,       NULL,       1 << 7,       0,           -1 },
+  {"notion-app",                NULL,       NULL,       1 << 6,       0,           -1 },
 };
 
 /* layout(s) */
@@ -64,12 +65,14 @@ static const Layout layouts[] = {
 static const char *roficmd[] = { "rofi", "-show", "run", NULL };
 static const char *termcmd[]  = { "st", NULL };
 static const char *prtsccmd[]  = { "flameshot", "gui", NULL };
+static const char *trayercmd[]  = { "/home/yyooo/Documents/scripts/trayer.sh",  NULL };
 
 static const Key keys[] = {
 	/* modifier                     key        function        argument */
 	{ MODKEY,                       XK_p,      spawn,          {.v = roficmd } },
 	{ MODKEY|ShiftMask,             XK_Return, spawn,          {.v = termcmd } },
 	{ MODKEY,                       XK_s,      spawn,          {.v = prtsccmd } },
+	{ MODKEY|ShiftMask,             XK_s,      spawn,          {.v = trayercmd } },
 
 	{ MODKEY,                       XK_b,      togglebar,      {0} },
 
